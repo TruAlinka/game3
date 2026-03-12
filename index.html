@@ -66,7 +66,6 @@
       background: #7af;
       color: #fff;
     }
-    /* DRAG-n-DROP style */
     .dd-letter-bank { min-height:48px;margin-bottom:13px;}
     .dd-letter {
       display:inline-block;
@@ -80,9 +79,10 @@
       transition:.11s;
       border:1.5px solid #a9c8e6;
       user-select: none;
+      position: relative;
     }
     .dd-letter.dragging {
-      opacity: 0.4;
+      opacity: 0.25 !important;
     }
     .dd-slot-box { 
       min-height:52px;
@@ -95,6 +95,7 @@
       margin-bottom:10px;
       border:2px dashed #a9c8e6;
       flex-wrap: wrap;
+      position:relative;
     }
     .dd-slot {
       width:35px;height:35px;display:inline-flex;align-items:center;justify-content:center;
@@ -104,11 +105,10 @@
       font-size:21px;
       margin:2px;
       transition:.1s;
+      z-index:1;
+      position:relative;
+      box-sizing:border-box;
     }
-    .dd-slot.drop-target {
-      border:2px solid #7af; background:#defb;
-    }
-    /* ПРОГРЕСС ШКАЛА */
     .manual-scale { 
       display: flex; gap: 10px; justify-content: center; align-items:center; margin:22px auto 10px;
     }
@@ -119,6 +119,13 @@
       font-size:21px; font-weight:700;color:#fff;
     }
     .scale-dot.active { background:#7af; color:#fff; border:2px solid #378cfc;}
+    #dnd-float-letter {
+      pointer-events:none;
+      position:fixed;
+      z-index:9999;
+      left:0;top:0;
+      display: none;
+    }
     @media (max-width: 700px) {
       #game-root { max-width: 99vw; }
       .task-tile { width: 95vw; max-width: 99vw; margin-bottom: 14px;}
@@ -128,12 +135,9 @@
 <body>
 <div id="game-root"></div>
 <script>
-/* ==== SETTINGS ==== */
 const gameSettings = {
-    background: "#f4f6fc", // "#f4f6fc", "transparent", "white" — на выбор
-    // Позже этим параметром может управлять редактор
+    background: "#f4f6fc"
 };
-/* ==== ДАННЫЕ ==== */
 const tasksets = {
   ru: [
     { img: "https://cdn.pixabay.com/photo/2017/01/20/15/06/apple-1995056_1280.png", definition: "Красный фрукт, падает с дерева", answer: "яблоко", done: false },
@@ -148,14 +152,12 @@ const feedback = {
   ru: ["Молодец!","Верно!","Здорово!","Вот это да!"],
   en: ["Well done!","Correct!","Great job!","Awesome!"]
 };
-/* ==== СОСТОЯНИЯ ==== */
-let userLang = null; // 'ru' / 'en'
+let userLang = null;
 let tasks = [];
-let gameMode = null; // 'order' / 'input'
-let manualScale = []; // ручная шкала — отмеченные точки (заполняется, когда все задания пройдены)
-
+let gameMode = null;
+let manualScale = [];
 document.body.style.setProperty('--game-bg', gameSettings.background);
-/* ==== СТАРТОВЫЙ ЭКРАН ==== */
+
 function renderStart() {
   document.getElementById('game-root').innerHTML = `
     <div style="text-align:center; margin-top:20px;">
@@ -184,7 +186,6 @@ function renderStart() {
 }
 renderStart();
 
-/* ==== ГЛАВНАЯ ==== */
 function renderMain() {
   let root = document.getElementById('game-root');
   root.innerHTML = `
@@ -223,7 +224,6 @@ function renderMain() {
   }
 }
 
-/* ==== ОТКРЫТИЕ ЗАДАНИЯ ==== */
 function openTask(ix){
   if(tasks[ix].done) return;
   let t = tasks[ix];
@@ -236,65 +236,155 @@ function openTask(ix){
       <div id="feedback-area"></div>
       <br><br>
       <button onclick="renderMain()">${userLang==='ru'?'Назад':'Back'}</button>
+      <div id="dnd-float-letter"></div>
     </div>
   `;
   if(gameMode === 'order') renderOrderTask(ix);
   else renderInputTask(ix);
 }
 
-/* ==== МЕХАНИКА drag & drop (с поддержкой повторяющихся букв) ==== */
+/* --- Полноценный drag&drop (мышь+палец) --- */
 function renderOrderTask(ix){
   let t = tasks[ix];
   let answer = t.answer;
-  // Каждая буква как объект с уникальным id
   let letters = answer.split('').map((ch, i) => ({ch, id: i + '_' + Math.random().toString(36).substr(2,6)}));
   let state = {
     bank: [...letters],
-    slots: Array(letters.length).fill(null)
+    slots: Array(letters.length).fill(null),
+    draggingId: null,
+    dragOffset: {x:0, y:0},
+    dragPos: {x:-1000, y:-1000}
   };
+  let dragMoveHandler, dragUpHandler;
 
   function render() {
-    // Слоты для ответа
     let slotHTML = state.slots.map((obj, i) =>
       `<div class="dd-slot"
         data-slot="${i}"
-        ondragover="event.preventDefault(); this.classList.add('drop-target')"
-        ondragleave="this.classList.remove('drop-target')"
-        ondrop="dropLetter(event,${i})"
+        style="border:${state.dragHoverSlot===i ? '2px solid #7af':'1.4px solid #dfdbe7'};
+        background:${state.dragHoverSlot===i ? '#defc':'#fff'}"
+        onmouseenter="dndHighlightSlot(${i})"
+        onmouseleave="dndHighlightSlot(null)"
       >${obj ? `<span>${obj.ch}</span>` : ""}</div>`
     ).join('');
-    // Банк — только те буквы, которые не в слотах!
     let bankHTML = state.bank.map((obj, k) =>
-      `<span class="dd-letter" draggable="true"
-         ondragstart="dragLetter(event,'${obj.id}')"
+      `<span class="dd-letter" 
+         onmousedown="dndStart(event, '${obj.id}')"
+         ontouchstart="dndStart(event, '${obj.id}')"
+         style="user-select:none; position:relative;" 
          id="bank-${obj.id}"
       >${obj.ch}</span>`
     ).join('');
     document.getElementById('answer-area').innerHTML = `
       <div style="margin-bottom:10px;">${userLang==='ru'?'Соберите слово:':'Build the word:'}</div>
-      <div class="dd-slot-box">${slotHTML}</div>
-      <div class="dd-letter-bank">${bankHTML}</div>
+      <div class="dd-slot-box" id="drop-slot-box" style="position:relative;">
+        ${slotHTML}
+      </div>
+      <div class="dd-letter-bank" id="letter-bank">${bankHTML}</div>
       <button onclick="undoLast()" style="margin-top:7px;" ${state.slots.every(s=>!s)?'disabled':''}>↩ Undo</button>
+      <div style="margin:8px;font-size:12px;color:#888;">
+        ${userLang==='ru'?'Перетащите букву мышью или пальцем в нужную ячейку':'Drag and drop letter into slot'}
+      </div>
+      <div id="dnd-float-letter" style="display:none;"></div>
     `;
+    // floating letter
+    if(state.draggingId) {
+      let obj = state.bank.find(o=>o.id===state.draggingId);
+      const floatDiv = document.getElementById('dnd-float-letter');
+      if(obj){
+        floatDiv.style.display = 'block';
+        floatDiv.style.position = 'fixed';
+        floatDiv.style.zIndex = 9999;
+        floatDiv.style.pointerEvents = 'none';
+        floatDiv.style.left = (state.dragPos.x-state.dragOffset.x)+'px';
+        floatDiv.style.top = (state.dragPos.y-state.dragOffset.y)+'px';
+        floatDiv.innerHTML = `<span class="dd-letter" style="box-shadow:0 2px 20px #67abff7f; background:#b8eafd; color:#015;
+          font-size:27px; padding:10px 20px; border:2px solid #48e; position:relative; opacity:.93;">
+          ${obj.ch}
+        </span>`;
+      }
+    } else {
+      let floatDiv = document.getElementById('dnd-float-letter');
+      if(floatDiv) floatDiv.style.display='none';
+    }
   }
-  // Drag&Drop events
-  window.dragLetter = function(ev, id) {
-    ev.dataTransfer.effectAllowed = 'move';
-    ev.dataTransfer.setData("letterId", id);
-    document.getElementById('bank-'+id)?.classList.add('dragging');
-  };
-  window.dropLetter = function(ev, slotIx) {
-    ev.preventDefault();
-    let id = ev.dataTransfer.getData("letterId");
-    let fromBankIdx = state.bank.findIndex(obj=>obj.id === id);
-    if(state.slots[slotIx] || fromBankIdx === -1) return; // уже занято или с ошибкой
-    state.slots[slotIx] = state.bank[fromBankIdx];
-    state.bank.splice(fromBankIdx, 1);
+
+  window.dndHighlightSlot = function(i){
+    state.dragHoverSlot = i;
     render();
-    checkAnswer();
+  }
+  window.dndStart = function(ev, id){
+    ev.preventDefault();
+    const isTouch = ev.touches && ev.touches.length;
+    let x = isTouch ? ev.touches[0].clientX : ev.clientX;
+    let y = isTouch ? ev.touches[0].clientY : ev.clientY;
+    let btn = document.getElementById('bank-'+id);
+    let rect = btn.getBoundingClientRect();
+    state.draggingId = id;
+    state.dragOffset = { x: x - rect.left, y: y - rect.top };
+    state.dragPos = {x:x, y:y};
+    render();
+
+    dragMoveHandler = function(e){
+      let clientX, clientY;
+      if(e.touches) {
+        clientX = e.touches[0].clientX; clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX; clientY = e.clientY;
+      }
+      state.dragPos = {x:clientX, y:clientY};
+      // Slots
+      let slots = Array.from(document.querySelectorAll('.dd-slot'));
+      let over = null;
+      for(let i=0;i<slots.length;i++){
+        let r = slots[i].getBoundingClientRect();
+        if(clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom){
+          over = i; break;
+        }
+      }
+      state.dragHoverSlot = over;
+      render();
+    };
+    dragUpHandler = function(e){
+      let clientX, clientY;
+      if(e.changedTouches) {
+        clientX = e.changedTouches[0].clientX; clientY = e.changedTouches[0].clientY;
+      } else {
+        clientX = e.clientX; clientY = e.clientY;
+      }
+      let dropped = null;
+      let slots = Array.from(document.querySelectorAll('.dd-slot'));
+      for(let i=0;i<slots.length;i++){
+        let r = slots[i].getBoundingClientRect();
+        if(clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom){
+          dropped = i; break;
+        }
+      }
+      // move letter to slot
+      if(typeof dropped === 'number' && !state.slots[dropped]) {
+        let idx = state.bank.findIndex(obj=>obj.id===state.draggingId);
+        if(idx!==-1){
+          state.slots[dropped] = state.bank[idx];
+          state.bank.splice(idx,1);
+        }
+        state.draggingId = null; state.dragHoverSlot = null;
+        render();
+        checkAnswer();
+      } else {
+        state.draggingId = null; state.dragHoverSlot = null; render();
+      }
+      window.removeEventListener('mousemove',dragMoveHandler);
+      window.removeEventListener('touchmove',dragMoveHandler);
+      window.removeEventListener('mouseup',dragUpHandler);
+      window.removeEventListener('touchend',dragUpHandler);
+    };
+    window.addEventListener('mousemove', dragMoveHandler);
+    window.addEventListener('touchmove', dragMoveHandler, {passive:false});
+    window.addEventListener('mouseup', dragUpHandler);
+    window.addEventListener('touchend', dragUpHandler, {passive:false});
   };
+
   window.undoLast = function() {
-    // Снимает крайнюю букву в слотах
     for(let i=state.slots.length-1;i>=0;i--){
       if(state.slots[i]){
         state.bank.push(state.slots[i]);
@@ -304,8 +394,6 @@ function renderOrderTask(ix){
     }
     render();
   };
-  // убрать стиль "dragging"
-  window.addEventListener('dragend', ()=>document.querySelectorAll('.dragging').forEach(e=>e.classList.remove('dragging')));
 
   function checkAnswer() {
     if(state.slots.every(v=>v)){
@@ -316,7 +404,6 @@ function renderOrderTask(ix){
   render();
 }
 
-/* ==== Вариант "Печатать слово" ==== */
 function renderInputTask(ix){
   let t = tasks[ix];
   let html = `<div style="margin:12px;">${userLang==='ru'?'Введите слово:':'Type the word:'}</div>
@@ -330,7 +417,6 @@ window.checkInputAnswer = function(ix){
   if(val === tasks[ix].answer) positiveResult(ix);
 }
 
-/* ==== Положительный фидбек ==== */
 function positiveResult(ix){
   tasks[ix].done = true;
   let el = document.getElementById('feedback-area');
@@ -340,11 +426,9 @@ function positiveResult(ix){
   setTimeout(()=>renderMain(), 1700);
 }
 
-/* ==== Проверка завершения и ручная шкала ==== */
 function checkWin(){
   let root = document.getElementById('final-screen');
   if(tasks.every(t=>t.done)) {
-    // ручная шкала — студент отмечает свои правильные ответы САМ!
     root.innerHTML = `
       <div style="background:#dfffd9;padding:20px 16px;border-radius:13px;font-size:19px;color:#216423;margin:17px auto 9px;max-width:420px;box-shadow:0 2px 16px #aaffccd3;">
         🎉 ${userLang==='ru'?'Поздравляем! Все задания выполнены.' : 'All done!'}
@@ -357,7 +441,6 @@ function checkWin(){
         <div style="font-size:13px;color:#27684d;">${userLang==='ru'?'Проверьте, сколько слов вы действительно решили правильно.' : 'Check how many words you really got right.'}</div>
       </div>
     `;
-    // инициализация вручную если впервые
     if(!manualScale.some(()=>true) || manualScale.length!==tasks.length) manualScale = Array(tasks.length).fill(false);
   } else root.innerHTML = '';
 }
