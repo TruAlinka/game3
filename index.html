@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Интерактивный диктант — расширение для Genially</title>
+  <link href="https://fonts.googleapis.com/css?family=Montserrat:700,400&display=swap" rel="stylesheet">
+  <style>
+    :root { --game-bg: #f4f6fc; }
+    body {
+      background: var(--game-bg);
+      font-family: 'Montserrat', sans-serif;
+      margin: 0;
+      min-height: 100vh;
+    }
+    #game-root {
+      margin-top: 50px;
+      max-width: 820px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .tasks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: center;
+    }
+    .task-tile {
+      background: #fff;
+      box-shadow: 0 3px 8px #0001;
+      border-radius: 14px;
+      padding: 16px;
+      width: 180px;
+      text-align: center;
+      cursor: pointer;
+      position: relative;
+      transition: 0.2s;
+    }
+    .task-tile.done {
+      opacity: 0.5;
+    }
+    .task-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,128,64,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      color: #fff;
+      font-weight: 700;
+      border-radius: 14px;
+    }
+    .lang-btn, .mode-btn {
+      padding: 11px 25px;
+      margin: 10px 10px 18px 0;
+      border-radius: 9px;
+      background: #eaf;
+      cursor: pointer;
+      border: none;
+      font-size: 16px;
+      font-weight: 600;
+      color: #2b2952;
+      transition: 0.2s;
+    }
+    .lang-btn.active, .mode-btn.active {
+      background: #7af;
+      color: #fff;
+    }
+    /* DRAG-n-DROP style */
+    .dd-letter-bank { min-height:48px;margin-bottom:13px;}
+    .dd-letter {
+      display:inline-block;
+      font-size:23px;
+      background:#def;
+      border-radius:7px;
+      padding:6px 13px;
+      margin-right:7px;
+      margin-bottom:7px;
+      cursor:grab;
+      transition:.11s;
+      border:1.5px solid #a9c8e6;
+      user-select: none;
+    }
+    .dd-letter.dragging {
+      opacity: 0.4;
+    }
+    .dd-slot-box { 
+      min-height:52px;
+      background: #eaf2f4;
+      border-radius:8px;
+      display: flex;
+      justify-content: center;
+      padding: 6px;
+      gap: 5px;
+      margin-bottom:10px;
+      border:2px dashed #a9c8e6;
+      flex-wrap: wrap;
+    }
+    .dd-slot {
+      width:35px;height:35px;display:inline-flex;align-items:center;justify-content:center;
+      background: #fff;
+      border:1.4px solid #dfdbe7;
+      border-radius:7px;
+      font-size:21px;
+      margin:2px;
+      transition:.1s;
+    }
+    .dd-slot.drop-target {
+      border:2px solid #7af; background:#defb;
+    }
+    /* ПРОГРЕСС ШКАЛА */
+    .manual-scale { 
+      display: flex; gap: 10px; justify-content: center; align-items:center; margin:22px auto 10px;
+    }
+    .scale-dot {
+      width: 33px; height: 33px; border-radius: 50%; background: #eef; border:2px solid #7af;
+      cursor: pointer; transition:.13s;box-sizing:border-box;box-shadow:0 1px 8px #7af4;
+      display: flex; align-items:center; justify-content:center;
+      font-size:21px; font-weight:700;color:#fff;
+    }
+    .scale-dot.active { background:#7af; color:#fff; border:2px solid #378cfc;}
+    @media (max-width: 700px) {
+      #game-root { max-width: 99vw; }
+      .task-tile { width: 95vw; max-width: 99vw; margin-bottom: 14px;}
+    }
+  </style>
+</head>
+<body>
+<div id="game-root"></div>
+<script>
+/* ==== SETTINGS ==== */
+const gameSettings = {
+    background: "#f4f6fc", // "#f4f6fc", "transparent", "white" — на выбор
+    // Позже этим параметром может управлять редактор
+};
+/* ==== ДАННЫЕ ==== */
+const tasksets = {
+  ru: [
+    { img: "https://cdn.pixabay.com/photo/2017/01/20/15/06/apple-1995056_1280.png", definition: "Красный фрукт, падает с дерева", answer: "яблоко", done: false },
+    { img: "https://cdn.pixabay.com/photo/2012/04/13/20/24/dog-33613_1280.png", definition: "Четвероногий домашний друг человека", answer: "собака", done: false }
+  ],
+  en: [
+    { img: "https://cdn.pixabay.com/photo/2017/01/20/15/06/apple-1995056_1280.png", definition: "A red fruit that falls from a tree", answer: "apple", done: false },
+    { img: "https://cdn.pixabay.com/photo/2012/04/13/20/24/dog-33613_1280.png", definition: "A four-legged animal that barks", answer: "dog", done: false }
+  ]
+};
+const feedback = {
+  ru: ["Молодец!","Верно!","Здорово!","Вот это да!"],
+  en: ["Well done!","Correct!","Great job!","Awesome!"]
+};
+/* ==== СОСТОЯНИЯ ==== */
+let userLang = null; // 'ru' / 'en'
+let tasks = [];
+let gameMode = null; // 'order' / 'input'
+let manualScale = []; // ручная шкала — отмеченные точки (заполняется, когда все задания пройдены)
+
+document.body.style.setProperty('--game-bg', gameSettings.background);
+/* ==== СТАРТОВЫЙ ЭКРАН ==== */
+function renderStart() {
+  document.getElementById('game-root').innerHTML = `
+    <div style="text-align:center; margin-top:20px;">
+      <h2>Интерактивный диктант</h2>
+      <div>
+        <button class="lang-btn" onclick="chooseLang('ru')">Русский</button>
+        <button class="lang-btn" onclick="chooseLang('en')">English</button>
+      </div>
+      <div style="margin-top:30px;">
+        <button class="mode-btn" onclick="chooseMode('order')" disabled>Составить слово из букв (просто)</button>
+        <button class="mode-btn" onclick="chooseMode('input')" disabled>Печатать слово (сложно)</button>
+      </div>
+    </div>`;
+  window.chooseLang = function(lang){
+    userLang = lang;
+    tasks = tasksets[lang].map(x=>({...x, done:false}));
+    manualScale = Array(tasks.length).fill(false);
+    document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    document.querySelectorAll('.mode-btn').forEach(btn => btn.disabled = false);
+  }
+  window.chooseMode = function(mode){
+    gameMode = mode;
+    renderMain();
+  }
+}
+renderStart();
+
+/* ==== ГЛАВНАЯ ==== */
+function renderMain() {
+  let root = document.getElementById('game-root');
+  root.innerHTML = `
+    <div style="margin:25px 0 14px 5px;">
+      <button class="lang-btn ${userLang==='ru'?'active':''}" onclick="switchLang('ru')">RU</button>
+      <button class="lang-btn ${userLang==='en'?'active':''}" onclick="switchLang('en')">EN</button>
+      <span style="margin-left:22px;"></span>
+      <button class="mode-btn ${gameMode==='order'?'active':''}" onclick="switchMode('order')">${userLang==='ru'?'Буквы':'Order letters'}</button>
+      <button class="mode-btn ${gameMode==='input'?'active':''}" onclick="switchMode('input')">${userLang==='ru'?'Печатать':'Type word'}</button>
+    </div>
+    <div class="tasks">
+      ${tasks.map((t,i)=>`
+        <div class="task-tile${t.done?' done':''}" onclick="openTask(${i})">
+          <img src="${t.img}" style="width:90px;height:90px;object-fit:contain;" />
+          <div style="margin:8px 0 5px;font-weight:600;">${i+1}</div>
+          <div style="min-height:32px;color:#555">${t.definition}</div>
+          ${t.done ? `<div class="task-overlay"><span>✔</span></div>` : ''}
+        </div>
+      `).join('')}
+    </div>
+    <div id="final-screen"></div>
+  `;
+  checkWin();
+  window.switchLang = function(lang) {
+    if(userLang !== lang) {
+      userLang = lang;
+      tasks = tasksets[lang].map(x=>({...x,done:false}));
+      manualScale = Array(tasks.length).fill(false);
+      renderMain();
+    }
+  }
+  window.switchMode = function(mode){
+    if(gameMode !== mode){
+      gameMode = mode; renderMain();
+    }
+  }
+}
+
+/* ==== ОТКРЫТИЕ ЗАДАНИЯ ==== */
+function openTask(ix){
+  if(tasks[ix].done) return;
+  let t = tasks[ix];
+  let root = document.getElementById('game-root');
+  root.innerHTML = `
+    <div style="padding:30px;text-align:center;">
+      <img src="${t.img}" style="width:120px;height:120px;object-fit:contain;"/>
+      <div style="margin:15px 0 25px 0; font-size:18px;">${t.definition}</div>
+      <div id="answer-area"></div>
+      <div id="feedback-area"></div>
+      <br><br>
+      <button onclick="renderMain()">${userLang==='ru'?'Назад':'Back'}</button>
+    </div>
+  `;
+  if(gameMode === 'order') renderOrderTask(ix);
+  else renderInputTask(ix);
+}
+
+/* ==== МЕХАНИКА drag & drop ==== */
+function renderOrderTask(ix){
+  let t = tasks[ix];
+  let answer = t.answer;
+  let letters = answer.split('').map(x=>x);
+  let shuffled = [...letters].sort(()=>Math.random()-0.5);
+  let slots = Array(letters.length).fill("");
+
+  function render() {
+    // Drop-зона
+    let slotHTML = slots.map((ch, i) =>
+      `<div class="dd-slot" 
+        data-slot="${i}"
+        ondragover="event.preventDefault(); this.classList.add('drop-target')"
+        ondragleave="this.classList.remove('drop-target')"
+        ondrop="dropLetter(event,${i})">
+          ${ch ? `<span>${ch}</span>` : ""}
+      </div>`).join('');
+    // "Банк" букв
+    let inBank = shuffled.filter(ch => slots.indexOf(ch)===-1); // нераспределённые
+    let bankHTML = inBank.map((ch, k)=>
+      `<span class="dd-letter" draggable="true" ondragstart="dragLetter(event,'${ch}')" >${ch}</span>`
+    ).join('');
+    document.getElementById('answer-area').innerHTML = `
+      <div style="margin-bottom:10px;">${userLang==='ru'?'Соберите слово:':'Build the word:'}</div>
+      <div class="dd-slot-box">${slotHTML}</div>
+      <div class="dd-letter-bank">${bankHTML}</div>
+      <button onclick="undoLast()" style="margin-top:7px;" ${slots.every(s=>!s)?'disabled':''}>↩ Undo</button>
+    `;
+  }
+  // Drag&Drop events
+  window.dragLetter = function(ev, ch) {
+    ev.dataTransfer.effectAllowed = 'move';
+    ev.dataTransfer.setData("letter", ch);
+    ev.target.classList.add("dragging");
+  };
+  window.dropLetter = function(ev, slotIx) {
+    ev.preventDefault();
+    let ch = ev.dataTransfer.getData("letter");
+    if(slots[slotIx]) return; // только в пустую ячейку
+    // убрать этот символ из bank (т.е. не помещать в другой слот)
+    slots[slotIx]=ch;
+    render();
+    checkAnswer();
+  };
+  window.undoLast = function() {
+    for(let i=slots.length-1;i>=0;i--){
+      if(slots[i]){ slots[i]=""; break; }
+    }
+    render();
+  };
+  // чтобы убрать стиль dragging
+  document.querySelectorAll('.dd-letter').forEach(e=>e.ondragend=()=>e.classList.remove("dragging"));
+
+  function checkAnswer() {
+    if(slots.every(v=>v)){
+      let userWord = slots.join('');
+      if(userWord === answer) positiveResult(ix);
+    }
+  }
+  render();
+}
+
+/* ==== Вариант "Печатать слово" ==== */
+function renderInputTask(ix){
+  let t = tasks[ix];
+  let html = `<div style="margin:12px;">${userLang==='ru'?'Введите слово:':'Type the word:'}</div>
+    <input id="user-input" type="text" maxlength="${t.answer.length+2}" style="font-size:21px; padding:5px; max-width:200px; text-align:center; border-radius:6px; border:1px solid #ccc;"/>
+    <br><br>
+    <button onclick="checkInputAnswer(${ix})">${userLang==='ru'?'Проверить':'Check'}</button>`;
+  document.getElementById('answer-area').innerHTML = html;
+}
+window.checkInputAnswer = function(ix){
+  let val = (document.getElementById('user-input').value||'').trim().toLowerCase();
+  if(val === tasks[ix].answer) positiveResult(ix);
+}
+
+/* ==== Положительный фидбек ==== */
+function positiveResult(ix){
+  tasks[ix].done = true;
+  let el = document.getElementById('feedback-area');
+  let msg = feedback[userLang][Math.floor(Math.random()*feedback[userLang].length)];
+  el.innerHTML = `<div style="padding:25px 10px 7px;font-size:22px;color:#27684d;">${msg}<br>
+    <button onclick="renderMain()" style="margin-top:17px;">${userLang==='ru'?'Вернуться':'Go back'}</button></div>`;
+  setTimeout(()=>renderMain(), 1700);
+}
+
+/* ==== Проверка завершения и ручная шкала ==== */
+function checkWin(){
+  let root = document.getElementById('final-screen');
+  if(tasks.every(t=>t.done)) {
+    // ручная шкала — студент отмечает свои правильные ответы САМ!
+    root.innerHTML = `
+      <div style="background:#dfffd9;padding:20px 16px;border-radius:13px;font-size:19px;color:#216423;margin:17px auto 9px;max-width:420px;box-shadow:0 2px 16px #aaffccd3;">
+        🎉 ${userLang==='ru'?'Поздравляем! Все задания выполнены.' : 'All done!'}
+        <br>
+        ${userLang==='ru'?'Отметьте самостоятельно количество правильных ответов:' : 'Mark your correct answers manually:'}
+        <div class="manual-scale">${manualScale.map((v,ix)=>
+          `<div class="scale-dot${v?' active':''}" onclick="markSelf(${ix})">${v?'✔':''}</div>`
+        ).join('')}
+        </div>
+        <div style="font-size:13px;color:#27684d;">${userLang==='ru'?'Проверьте, сколько слов вы действительно решили правильно.' : 'Check how many words you really got right.'}</div>
+      </div>
+    `;
+    // инициализация вручную если впервые
+    if(!manualScale.some(()=>true) || manualScale.length!==tasks.length) manualScale = Array(tasks.length).fill(false);
+  } else root.innerHTML = '';
+}
+window.markSelf = function(ix){
+  manualScale[ix] = !manualScale[ix];
+  checkWin();
+};
+</script>
+</body>
+</html>
