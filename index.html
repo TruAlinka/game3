@@ -80,9 +80,10 @@
       border:1.5px solid #a9c8e6;
       user-select: none;
       position: relative;
+      z-index: 1;
     }
     .dd-letter.dragging {
-      opacity: 0.25 !important;
+      opacity: 0.18 !important;
     }
     .dd-slot-box { 
       min-height:52px;
@@ -105,9 +106,9 @@
       font-size:21px;
       margin:2px;
       transition:.1s;
-      z-index:1;
       position:relative;
       box-sizing:border-box;
+      z-index:0;
     }
     .manual-scale { 
       display: flex; gap: 10px; justify-content: center; align-items:center; margin:22px auto 10px;
@@ -243,166 +244,170 @@ function openTask(ix){
   else renderInputTask(ix);
 }
 
-/* --- Полноценный drag&drop (мышь+палец) --- */
+// ================= Drag&Drop ==================
+let dndState = {};
+let activeIxForDND = null;
+
 function renderOrderTask(ix){
   let t = tasks[ix];
   let answer = t.answer;
-  let letters = answer.split('').map((ch, i) => ({ch, id: i + '_' + Math.random().toString(36).substr(2,6)}));
-  let state = {
-    bank: [...letters],
-    slots: Array(letters.length).fill(null),
-    draggingId: null,
-    dragOffset: {x:0, y:0},
-    dragPos: {x:-1000, y:-1000}
-  };
-  let dragMoveHandler, dragUpHandler;
-
-  function render() {
-    let slotHTML = state.slots.map((obj, i) =>
-      `<div class="dd-slot"
-        data-slot="${i}"
-        style="border:${state.dragHoverSlot===i ? '2px solid #7af':'1.4px solid #dfdbe7'};
-        background:${state.dragHoverSlot===i ? '#defc':'#fff'}"
-        onmouseenter="dndHighlightSlot(${i})"
-        onmouseleave="dndHighlightSlot(null)"
-      >${obj ? `<span>${obj.ch}</span>` : ""}</div>`
-    ).join('');
-    let bankHTML = state.bank.map((obj, k) =>
-      `<span class="dd-letter" 
-         onmousedown="dndStart(event, '${obj.id}')"
-         ontouchstart="dndStart(event, '${obj.id}')"
-         style="user-select:none; position:relative;" 
-         id="bank-${obj.id}"
-      >${obj.ch}</span>`
-    ).join('');
-    document.getElementById('answer-area').innerHTML = `
-      <div style="margin-bottom:10px;">${userLang==='ru'?'Соберите слово:':'Build the word:'}</div>
-      <div class="dd-slot-box" id="drop-slot-box" style="position:relative;">
-        ${slotHTML}
-      </div>
-      <div class="dd-letter-bank" id="letter-bank">${bankHTML}</div>
-      <button onclick="undoLast()" style="margin-top:7px;" ${state.slots.every(s=>!s)?'disabled':''}>↩ Undo</button>
-      <div style="margin:8px;font-size:12px;color:#888;">
-        ${userLang==='ru'?'Перетащите букву мышью или пальцем в нужную ячейку':'Drag and drop letter into slot'}
-      </div>
-      <div id="dnd-float-letter" style="display:none;"></div>
-    `;
-    // floating letter
-    if(state.draggingId) {
-      let obj = state.bank.find(o=>o.id===state.draggingId);
-      const floatDiv = document.getElementById('dnd-float-letter');
-      if(obj){
-        floatDiv.style.display = 'block';
-        floatDiv.style.position = 'fixed';
-        floatDiv.style.zIndex = 9999;
-        floatDiv.style.pointerEvents = 'none';
-        floatDiv.style.left = (state.dragPos.x-state.dragOffset.x)+'px';
-        floatDiv.style.top = (state.dragPos.y-state.dragOffset.y)+'px';
-        floatDiv.innerHTML = `<span class="dd-letter" style="box-shadow:0 2px 20px #67abff7f; background:#b8eafd; color:#015;
-          font-size:27px; padding:10px 20px; border:2px solid #48e; position:relative; opacity:.93;">
-          ${obj.ch}
-        </span>`;
-      }
-    } else {
-      let floatDiv = document.getElementById('dnd-float-letter');
-      if(floatDiv) floatDiv.style.display='none';
-    }
-  }
-
-  window.dndHighlightSlot = function(i){
-    state.dragHoverSlot = i;
-    render();
-  }
-  window.dndStart = function(ev, id){
-    ev.preventDefault();
-    const isTouch = ev.touches && ev.touches.length;
-    let x = isTouch ? ev.touches[0].clientX : ev.clientX;
-    let y = isTouch ? ev.touches[0].clientY : ev.clientY;
-    let btn = document.getElementById('bank-'+id);
-    let rect = btn.getBoundingClientRect();
-    state.draggingId = id;
-    state.dragOffset = { x: x - rect.left, y: y - rect.top };
-    state.dragPos = {x:x, y:y};
-    render();
-
-    dragMoveHandler = function(e){
-      let clientX, clientY;
-      if(e.touches) {
-        clientX = e.touches[0].clientX; clientY = e.touches[0].clientY;
-      } else {
-        clientX = e.clientX; clientY = e.clientY;
-      }
-      state.dragPos = {x:clientX, y:clientY};
-      // Slots
-      let slots = Array.from(document.querySelectorAll('.dd-slot'));
-      let over = null;
-      for(let i=0;i<slots.length;i++){
-        let r = slots[i].getBoundingClientRect();
-        if(clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom){
-          over = i; break;
-        }
-      }
-      state.dragHoverSlot = over;
-      render();
+  if(!dndState[ix]) {
+    let letters = answer.split('').map((ch, i) => ({ch, id: i + '_' + Math.random().toString(36).substr(2,6)}));
+    dndState[ix] = {
+      bank: [...letters],
+      slots: Array(letters.length).fill(null),
+      draggingId: null,
+      dragOffset: {x:0, y:0},
+      dragPos: {x:-1000, y:-1000},
+      dragHoverSlot: null
     };
-    dragUpHandler = function(e){
-      let clientX, clientY;
-      if(e.changedTouches) {
-        clientX = e.changedTouches[0].clientX; clientY = e.changedTouches[0].clientY;
-      } else {
-        clientX = e.clientX; clientY = e.clientY;
-      }
-      let dropped = null;
-      let slots = Array.from(document.querySelectorAll('.dd-slot'));
-      for(let i=0;i<slots.length;i++){
-        let r = slots[i].getBoundingClientRect();
-        if(clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom){
-          dropped = i; break;
-        }
-      }
-      // move letter to slot
-      if(typeof dropped === 'number' && !state.slots[dropped]) {
-        let idx = state.bank.findIndex(obj=>obj.id===state.draggingId);
-        if(idx!==-1){
-          state.slots[dropped] = state.bank[idx];
-          state.bank.splice(idx,1);
-        }
-        state.draggingId = null; state.dragHoverSlot = null;
-        render();
-        checkAnswer();
-      } else {
-        state.draggingId = null; state.dragHoverSlot = null; render();
-      }
-      window.removeEventListener('mousemove',dragMoveHandler);
-      window.removeEventListener('touchmove',dragMoveHandler);
-      window.removeEventListener('mouseup',dragUpHandler);
-      window.removeEventListener('touchend',dragUpHandler);
-    };
-    window.addEventListener('mousemove', dragMoveHandler);
-    window.addEventListener('touchmove', dragMoveHandler, {passive:false});
-    window.addEventListener('mouseup', dragUpHandler);
-    window.addEventListener('touchend', dragUpHandler, {passive:false});
-  };
-
-  window.undoLast = function() {
-    for(let i=state.slots.length-1;i>=0;i--){
-      if(state.slots[i]){
-        state.bank.push(state.slots[i]);
-        state.slots[i]=null;
-        break;
-      }
-    }
-    render();
-  };
-
-  function checkAnswer() {
-    if(state.slots.every(v=>v)){
-      let userWord = state.slots.map(x=>x.ch).join('');
-      if(userWord === answer) positiveResult(ix);
-    }
   }
-  render();
+  let state = dndState[ix];
+
+  let slotHTML = state.slots.map((obj, i) =>
+    `<div class="dd-slot"
+      data-slot="${i}"
+      style="border:${state.dragHoverSlot===i ? '2px solid #7af':'1.4px solid #dfdbe7'};
+      background:${state.dragHoverSlot===i ? '#defc':'#fff'}"
+    >${obj ? `<span>${obj.ch}</span>` : ""}</div>`
+  ).join('');
+  let bankHTML = state.bank.map((obj, k) =>
+    `<span class="dd-letter" 
+       onmousedown="dndStart(event, '${obj.id}', ${ix})"
+       ontouchstart="dndStart(event, '${obj.id}', ${ix})"
+       id="bank-${obj.id}"
+    >${obj.ch}</span>`
+  ).join('');
+  document.getElementById('answer-area').innerHTML = `
+    <div style="margin-bottom:10px;">${userLang==='ru'?'Соберите слово:':'Build the word:'}</div>
+    <div class="dd-slot-box" id="drop-slot-box" style="position:relative;">
+      ${slotHTML}
+    </div>
+    <div class="dd-letter-bank" id="letter-bank">${bankHTML}</div>
+    <button onclick="undoLast(${ix})" style="margin-top:7px;" ${state.slots.every(s=>!s)?'disabled':''}>↩ Undo</button>
+    <div style="margin:8px;font-size:12px;color:#888;">
+      ${userLang==='ru'?'Перетащите букву мышью или пальцем в нужную ячейку':'Drag and drop letter into slot'}
+    </div>
+    <div id="dnd-float-letter" style="display:none;"></div>
+  `;
+
+  // floating letter
+  if(state.draggingId) {
+    let obj = state.bank.find(o=>o.id===state.draggingId);
+    const floatDiv = document.getElementById('dnd-float-letter');
+    if(obj){
+      floatDiv.style.display = 'block';
+      floatDiv.style.position = 'fixed';
+      floatDiv.style.zIndex = 9999;
+      floatDiv.style.pointerEvents = 'none';
+      floatDiv.style.left = (state.dragPos.x-state.dragOffset.x)+'px';
+      floatDiv.style.top = (state.dragPos.y-state.dragOffset.y)+'px';
+      floatDiv.innerHTML = `<span class="dd-letter" style="box-shadow:0 2px 20px #67abff7f; background:#b8eafd; color:#015;
+        font-size:27px; padding:10px 20px; border:2px solid #48e; position:relative; opacity:.93;">
+        ${obj.ch}
+      </span>`;
+    }
+  } else {
+    let floatDiv = document.getElementById('dnd-float-letter');
+    if(floatDiv) floatDiv.style.display='none';
+  }
 }
+
+// DND event handlers (глобально!)
+function dndStart(ev, id, ix){
+  activeIxForDND = ix;
+  let state = dndState[ix];
+  ev.preventDefault();
+  const isTouch = ev.touches && ev.touches.length;
+  let x = isTouch ? ev.touches[0].clientX : ev.clientX;
+  let y = isTouch ? ev.touches[0].clientY : ev.clientY;
+  let btn = document.getElementById('bank-'+id);
+  let rect = btn.getBoundingClientRect();
+  state.draggingId = id;
+  state.dragOffset = { x: x - rect.left, y: y - rect.top };
+  state.dragPos = {x:x, y:y};
+  renderOrderTask(ix);
+
+  window.addEventListener('mousemove', dragMoveHandler);
+  window.addEventListener('touchmove', dragMoveHandler, {passive:false});
+  window.addEventListener('mouseup', dragUpHandler);
+  window.addEventListener('touchend', dragUpHandler, {passive:false});
+}
+function dragMoveHandler(e){
+  let state = dndState[activeIxForDND];
+  if(!state) return;
+  let clientX, clientY;
+  if(e.touches) {
+    clientX = e.touches[0].clientX; clientY = e.touches[0].clientY;
+  } else {
+    clientX = e.clientX; clientY = e.clientY;
+  }
+  state.dragPos = {x:clientX, y:clientY};
+  let slots = Array.from(document.querySelectorAll('.dd-slot'));
+  let over = null;
+  for(let i=0;i<slots.length;i++){
+    let r = slots[i].getBoundingClientRect();
+    if(clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom){
+      over = i; break;
+    }
+  }
+  state.dragHoverSlot = over;
+  renderOrderTask(activeIxForDND);
+}
+function dragUpHandler(e){
+  let state = dndState[activeIxForDND];
+  if(!state) return;
+  let clientX, clientY;
+  if(e.changedTouches) {
+    clientX = e.changedTouches[0].clientX; clientY = e.changedTouches[0].clientY;
+  } else {
+    clientX = e.clientX; clientY = e.clientY;
+  }
+  let dropped = null;
+  let slots = Array.from(document.querySelectorAll('.dd-slot'));
+  for(let i=0;i<slots.length;i++){
+    let r = slots[i].getBoundingClientRect();
+    if(clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom){
+      dropped = i; break;
+    }
+  }
+  if(typeof dropped === 'number' && !state.slots[dropped]) {
+    let idx = state.bank.findIndex(obj=>obj.id===state.draggingId);
+    if(idx!==-1){
+      state.slots[dropped] = state.bank[idx];
+      state.bank.splice(idx,1);
+    }
+    state.draggingId = null; state.dragHoverSlot = null;
+    renderOrderTask(activeIxForDND);
+    checkAnswerDND(activeIxForDND);
+  } else {
+    state.draggingId = null; state.dragHoverSlot = null; renderOrderTask(activeIxForDND);
+  }
+  window.removeEventListener('mousemove',dragMoveHandler);
+  window.removeEventListener('touchmove',dragMoveHandler);
+  window.removeEventListener('mouseup',dragUpHandler);
+  window.removeEventListener('touchend',dragUpHandler);
+}
+function undoLast(ix) {
+  let state = dndState[ix];
+  for(let i=state.slots.length-1;i>=0;i--){
+    if(state.slots[i]){
+      state.bank.push(state.slots[i]);
+      state.slots[i]=null;
+      break;
+    }
+  }
+  renderOrderTask(ix);
+}
+function checkAnswerDND(ix){
+  let state = dndState[ix];
+  if(state.slots.every(v=>v)){
+    let answer = tasks[ix].answer;
+    let userWord = state.slots.map(x=>x.ch).join('');
+    if(userWord === answer) positiveResult(ix);
+  }
+}
+// ================
 
 function renderInputTask(ix){
   let t = tasks[ix];
