@@ -242,63 +242,74 @@ function openTask(ix){
   else renderInputTask(ix);
 }
 
-/* ==== МЕХАНИКА drag & drop ==== */
+/* ==== МЕХАНИКА drag & drop (с поддержкой повторяющихся букв) ==== */
 function renderOrderTask(ix){
   let t = tasks[ix];
   let answer = t.answer;
-  let letters = answer.split('').map(x=>x);
-  let shuffled = [...letters].sort(()=>Math.random()-0.5);
-  let slots = Array(letters.length).fill("");
+  // Каждая буква как объект с уникальным id
+  let letters = answer.split('').map((ch, i) => ({ch, id: i + '_' + Math.random().toString(36).substr(2,6)}));
+  let state = {
+    bank: [...letters],
+    slots: Array(letters.length).fill(null)
+  };
 
   function render() {
-    // Drop-зона
-    let slotHTML = slots.map((ch, i) =>
-      `<div class="dd-slot" 
+    // Слоты для ответа
+    let slotHTML = state.slots.map((obj, i) =>
+      `<div class="dd-slot"
         data-slot="${i}"
         ondragover="event.preventDefault(); this.classList.add('drop-target')"
         ondragleave="this.classList.remove('drop-target')"
-        ondrop="dropLetter(event,${i})">
-          ${ch ? `<span>${ch}</span>` : ""}
-      </div>`).join('');
-    // "Банк" букв
-    let inBank = shuffled.filter(ch => slots.indexOf(ch)===-1); // нераспределённые
-    let bankHTML = inBank.map((ch, k)=>
-      `<span class="dd-letter" draggable="true" ondragstart="dragLetter(event,'${ch}')" >${ch}</span>`
+        ondrop="dropLetter(event,${i})"
+      >${obj ? `<span>${obj.ch}</span>` : ""}</div>`
+    ).join('');
+    // Банк — только те буквы, которые не в слотах!
+    let bankHTML = state.bank.map((obj, k) =>
+      `<span class="dd-letter" draggable="true"
+         ondragstart="dragLetter(event,'${obj.id}')"
+         id="bank-${obj.id}"
+      >${obj.ch}</span>`
     ).join('');
     document.getElementById('answer-area').innerHTML = `
       <div style="margin-bottom:10px;">${userLang==='ru'?'Соберите слово:':'Build the word:'}</div>
       <div class="dd-slot-box">${slotHTML}</div>
       <div class="dd-letter-bank">${bankHTML}</div>
-      <button onclick="undoLast()" style="margin-top:7px;" ${slots.every(s=>!s)?'disabled':''}>↩ Undo</button>
+      <button onclick="undoLast()" style="margin-top:7px;" ${state.slots.every(s=>!s)?'disabled':''}>↩ Undo</button>
     `;
   }
   // Drag&Drop events
-  window.dragLetter = function(ev, ch) {
+  window.dragLetter = function(ev, id) {
     ev.dataTransfer.effectAllowed = 'move';
-    ev.dataTransfer.setData("letter", ch);
-    ev.target.classList.add("dragging");
+    ev.dataTransfer.setData("letterId", id);
+    document.getElementById('bank-'+id)?.classList.add('dragging');
   };
   window.dropLetter = function(ev, slotIx) {
     ev.preventDefault();
-    let ch = ev.dataTransfer.getData("letter");
-    if(slots[slotIx]) return; // только в пустую ячейку
-    // убрать этот символ из bank (т.е. не помещать в другой слот)
-    slots[slotIx]=ch;
+    let id = ev.dataTransfer.getData("letterId");
+    let fromBankIdx = state.bank.findIndex(obj=>obj.id === id);
+    if(state.slots[slotIx] || fromBankIdx === -1) return; // уже занято или с ошибкой
+    state.slots[slotIx] = state.bank[fromBankIdx];
+    state.bank.splice(fromBankIdx, 1);
     render();
     checkAnswer();
   };
   window.undoLast = function() {
-    for(let i=slots.length-1;i>=0;i--){
-      if(slots[i]){ slots[i]=""; break; }
+    // Снимает крайнюю букву в слотах
+    for(let i=state.slots.length-1;i>=0;i--){
+      if(state.slots[i]){
+        state.bank.push(state.slots[i]);
+        state.slots[i]=null;
+        break;
+      }
     }
     render();
   };
-  // чтобы убрать стиль dragging
-  document.querySelectorAll('.dd-letter').forEach(e=>e.ondragend=()=>e.classList.remove("dragging"));
+  // убрать стиль "dragging"
+  window.addEventListener('dragend', ()=>document.querySelectorAll('.dragging').forEach(e=>e.classList.remove('dragging')));
 
   function checkAnswer() {
-    if(slots.every(v=>v)){
-      let userWord = slots.join('');
+    if(state.slots.every(v=>v)){
+      let userWord = state.slots.map(x=>x.ch).join('');
       if(userWord === answer) positiveResult(ix);
     }
   }
