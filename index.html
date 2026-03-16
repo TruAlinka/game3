@@ -1,458 +1,256 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>Интерактивный диктант — расширение для Genially</title>
-  <link href="https://fonts.googleapis.com/css?family=Montserrat:700,400&display=swap" rel="stylesheet">
-  <style>
-    :root { --game-bg: #f4f6fc; }
-    body {
-      background: var(--game-bg);
-      font-family: 'Montserrat', sans-serif;
-      margin: 0;
-      min-height: 100vh;
-    }
-    #game-root {
-      margin-top: 50px;
-      max-width: 820px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    .tasks {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
-      justify-content: center;
-    }
-    .task-tile {
-      background: #fff;
-      box-shadow: 0 3px 8px #0001;
-      border-radius: 14px;
-      padding: 16px;
-      width: 180px;
-      text-align: center;
-      cursor: pointer;
-      position: relative;
-      transition: 0.2s;
-    }
-    .task-tile.done {
-      opacity: 0.5;
-    }
-    .task-overlay {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,128,64,0.45);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 28px;
-      color: #fff;
-      font-weight: 700;
-      border-radius: 14px;
-    }
-    .lang-btn, .mode-btn {
-      padding: 11px 25px;
-      margin: 10px 10px 18px 0;
-      border-radius: 9px;
-      background: #eaf;
-      cursor: pointer;
-      border: none;
-      font-size: 16px;
-      font-weight: 600;
-      color: #2b2952;
-      transition: 0.2s;
-    }
-    .lang-btn.active, .mode-btn.active {
-      background: #7af;
-      color: #fff;
-    }
-    .dd-letter-bank { min-height:48px;margin-bottom:13px;}
-    .dd-letter {
-      display:inline-block;
-      font-size:23px;
-      background:#def;
-      border-radius:7px;
-      padding:6px 13px;
-      margin-right:7px;
-      margin-bottom:7px;
-      cursor:grab;
-      transition:.11s;
-      border:1.5px solid #a9c8e6;
-      user-select: none;
-      position: relative;
-      z-index: 1;
-    }
-    .dd-letter.dragging {
-      opacity: 0.18 !important;
-    }
-    .dd-slot-box { 
-      min-height:52px;
-      background: #eaf2f4;
-      border-radius:8px;
-      display: flex;
-      justify-content: center;
-      padding: 6px;
-      gap: 5px;
-      margin-bottom:10px;
-      border:2px dashed #a9c8e6;
-      flex-wrap: wrap;
-      position:relative;
-    }
-    .dd-slot {
-      width:35px;height:35px;display:inline-flex;align-items:center;justify-content:center;
-      background: #fff;
-      border:1.4px solid #dfdbe7;
-      border-radius:7px;
-      font-size:21px;
-      margin:2px;
-      transition:.1s;
-      position:relative;
-      box-sizing:border-box;
-      z-index:0;
-    }
-    .manual-scale { 
-      display: flex; gap: 10px; justify-content: center; align-items:center; margin:22px auto 10px;
-    }
-    .scale-dot {
-      width: 33px; height: 33px; border-radius: 50%; background: #eef; border:2px solid #7af;
-      cursor: pointer; transition:.13s;box-sizing:border-box;box-shadow:0 1px 8px #7af4;
-      display: flex; align-items:center; justify-content:center;
-      font-size:21px; font-weight:700;color:#fff;
-    }
-    .scale-dot.active { background:#7af; color:#fff; border:2px solid #378cfc;}
-    #dnd-float-letter {
-      pointer-events:none;
-      position:fixed;
-      z-index:9999;
-      left:0;top:0;
-      display: none;
-    }
-    @media (max-width: 700px) {
-      #game-root { max-width: 99vw; }
-      .task-tile { width: 95vw; max-width: 99vw; margin-bottom: 14px;}
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="page-title">Редактор Игры</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; display: flex; gap: 20px; padding: 20px; background-color: #f4f4f9; color: #333; min-height: 100vh; }
+        .editor, .preview { flex: 1; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); overflow-y: auto; }
+        .editor-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
+        h1, h2 { margin: 0; padding: 0; border-bottom: none; }
+        h2 { margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        label { display: block; margin-top: 15px; font-weight: bold; }
+        input[type="text"], input[type="url"], textarea, select { width: 95%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        textarea { height: 200px; resize: vertical; }
+        .color-inputs, .transparent-bg-control { display: flex; gap: 20px; align-items: center; margin-top: 10px; }
+        .transparent-bg-control label { margin-top: 0; }
+        input[type="color"] { width: 50px; height: 50px; border: none; padding: 0; cursor: pointer; transition: opacity 0.3s; }
+        input[type="color"]:disabled { opacity: 0.5; cursor: not-allowed; }
+        #generate-btn { width: 100%; padding: 15px; background-color: #007bff; color: white; border: none; border-radius: 5px; font-size: 18px; cursor: pointer; margin-top: 20px; }
+        #generate-btn:hover { background-color: #0056b3; }
+        #lang-toggle { padding: 8px 12px; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        #lang-toggle:hover { background-color: #5a6268; }
+        #output-code { font-family: monospace; white-space: pre; background-color: #2d2d2d; color: #f1f1f1; }
+        #preview-container { width: 100%; height: 650px; border: 1px solid #ccc; border-radius: 4px; }
+        .help-text { font-size: 14px; color: #666; margin-top: 5px; background: #f9f9f9; padding: 10px; border-radius: 4px; }
+    </style>
 </head>
 <body>
-<div id="game-root"></div>
+
+    <div class="editor">
+        <div class="editor-header">
+            <h1 id="editor-title">Редактор Игры</h1>
+            <button id="lang-toggle">EN</button>
+        </div>
+
+        <h2 id="section-appearance">1. Внешний вид</h2>
+        <div class="color-inputs">
+            <div>
+                <label for="bg-color" id="label-bg-color">Цвет фона:</label>
+                <input type="color" id="bg-color" value="#f0f8ff">
+            </div>
+            <div>
+                <label for="btn-color" id="label-btn-color">Цвет элементов/прогресса:</label>
+                <input type="color" id="btn-color" value="#4CAF50">
+            </div>
+        </div>
+        <div class="transparent-bg-control">
+             <input type="checkbox" id="transparent-bg" style="width: auto;">
+             <label for="transparent-bg" id="label-transparent-bg">Прозрачный фон</label>
+        </div>
+        
+        <h2 id="section-game-type">2. Тип игры</h2>
+        <label for="game-type" id="label-game-type">Выберите сложность/тип задания:</label>
+        <select id="game-type">
+            <option value="anagram" id="game-type-anagram">Расставить буквы (легко)</option>
+            <option value="input" id="game-type-input">Впечатать ответ (сложно)</option>
+        </select>
+
+        <h2 id="section-content">3. Содержимое игры</h2>
+        <label for="game-data" id="label-game-data">Вопросы и ответы:</label>
+        <div class="help-text" id="help-text">
+            Каждая строка — один раунд. Формат: <br>
+            <b>Вопрос | Правильный ответ | Ссылка на картинку (необязательно)</b>
+        </div>
+        <textarea id="game-data">Самая большая планета Солнечной системы | Юпитер | https://i.ibb.co/L8y2hQZ/jupiter.png
+Столица Японии | Токио | https://i.ibb.co/Wc6YpQ8/tokyo.jpg
+Процесс превращения воды в пар | Испарение |</textarea>
+
+        <h2 id="section-feedback">4. Обратная связь</h2>
+        <label for="feedback-correct" id="label-feedback-correct">Текст при верном ответе:</label>
+        <input type="text" id="feedback-correct" value="Верно! Отлично!">
+        
+        <label for="feedback-incorrect" id="label-feedback-incorrect">Текст при неверном ответе:</label>
+        <input type="text" id="feedback-incorrect" value="Ошибка, попробуй еще раз.">
+        
+        <label for="feedback-final" id="label-feedback-final">Текст по завершении игры:</label>
+        <input type="text" id="feedback-final" value="Игра окончена! Вы молодец!">
+
+        <button id="generate-btn">Сгенерировать код и обновить превью</button>
+
+        <h2 id="section-code">5. Готовый код</h2>
+        <label for="output-iframe" id="label-output-iframe">Код для вставки на сайт (iframe):</label>
+        <textarea id="output-iframe" readonly></textarea>
+        
+        <label for="output-code" id="label-output-code">Полный HTML-код игры:</label>
+        <textarea id="output-code" readonly></textarea>
+    </div>
+
+    <div class="preview">
+        <h1 id="preview-title">Превью Игры</h1>
+        <iframe id="preview-container" title="Превью игры"></iframe>
+    </div>
+
 <script>
-const gameSettings = {
-    background: "#f4f6fc"
-};
-const tasksets = {
-  ru: [
-    { img: "https://cdn.pixabay.com/photo/2017/01/20/15/06/apple-1995056_1280.png", definition: "Красный фрукт, падает с дерева", answer: "яблоко", done: false },
-    { img: "https://cdn.pixabay.com/photo/2012/04/13/20/24/dog-33613_1280.png", definition: "Четвероногий домашний друг человека", answer: "собака", done: false }
-  ],
-  en: [
-    { img: "https://cdn.pixabay.com/photo/2017/01/20/15/06/apple-1995056_1280.png", definition: "A red fruit that falls from a tree", answer: "apple", done: false },
-    { img: "https://cdn.pixabay.com/photo/2012/04/13/20/24/dog-33613_1280.png", definition: "A four-legged animal that barks", answer: "dog", done: false }
-  ]
-};
-const feedback = {
-  ru: ["Молодец!","Верно!","Здорово!","Вот это да!"],
-  en: ["Well done!","Correct!","Great job!","Awesome!"]
-};
-let userLang = null;
-let tasks = [];
-let gameMode = null;
-let manualScale = [];
-document.body.style.setProperty('--game-bg', gameSettings.background);
-
-function renderStart() {
-  document.getElementById('game-root').innerHTML = `
-    <div style="text-align:center; margin-top:20px;">
-      <h2>Интерактивный диктант</h2>
-      <div>
-        <button class="lang-btn" onclick="chooseLang('ru')">Русский</button>
-        <button class="lang-btn" onclick="chooseLang('en')">English</button>
-      </div>
-      <div style="margin-top:30px;">
-        <button class="mode-btn" onclick="chooseMode('order')" disabled>Составить слово из букв (просто)</button>
-        <button class="mode-btn" onclick="chooseMode('input')" disabled>Печатать слово (сложно)</button>
-      </div>
-    </div>`;
-  window.chooseLang = function(lang){
-    userLang = lang;
-    tasks = tasksets[lang].map(x=>({...x, done:false}));
-    manualScale = Array(tasks.length).fill(false);
-    document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
-    document.querySelectorAll('.mode-btn').forEach(btn => btn.disabled = false);
-  }
-  window.chooseMode = function(mode){
-    gameMode = mode;
-    renderMain();
-  }
-}
-renderStart();
-
-function renderMain() {
-  let root = document.getElementById('game-root');
-  root.innerHTML = `
-    <div style="margin:25px 0 14px 5px;">
-      <button class="lang-btn ${userLang==='ru'?'active':''}" onclick="switchLang('ru')">RU</button>
-      <button class="lang-btn ${userLang==='en'?'active':''}" onclick="switchLang('en')">EN</button>
-      <span style="margin-left:22px;"></span>
-      <button class="mode-btn ${gameMode==='order'?'active':''}" onclick="switchMode('order')">${userLang==='ru'?'Буквы':'Order letters'}</button>
-      <button class="mode-btn ${gameMode==='input'?'active':''}" onclick="switchMode('input')">${userLang==='ru'?'Печатать':'Type word'}</button>
-    </div>
-    <div class="tasks">
-      ${tasks.map((t,i)=>`
-        <div class="task-tile${t.done?' done':''}" onclick="openTask(${i})">
-          <img src="${t.img}" style="width:90px;height:90px;object-fit:contain;" />
-          <div style="margin:8px 0 5px;font-weight:600;">${i+1}</div>
-          <div style="min-height:32px;color:#555">${t.definition}</div>
-          ${t.done ? `<div class="task-overlay"><span>✔</span></div>` : ''}
-        </div>
-      `).join('')}
-    </div>
-    <div id="final-screen"></div>
-  `;
-  checkWin();
-  window.switchLang = function(lang) {
-    if(userLang !== lang) {
-      userLang = lang;
-      tasks = tasksets[lang].map(x=>({...x,done:false}));
-      manualScale = Array(tasks.length).fill(false);
-      renderMain();
-    }
-  }
-  window.switchMode = function(mode){
-    if(gameMode !== mode){
-      gameMode = mode; renderMain();
-    }
-  }
-}
-
-function openTask(ix){
-  if(tasks[ix].done) return;
-  let t = tasks[ix];
-  let root = document.getElementById('game-root');
-  root.innerHTML = `
-    <div style="padding:30px;text-align:center;">
-      <img src="${t.img}" style="width:120px;height:120px;object-fit:contain;"/>
-      <div style="margin:15px 0 25px 0; font-size:18px;">${t.definition}</div>
-      <div id="answer-area"></div>
-      <div id="feedback-area"></div>
-      <br><br>
-      <button onclick="renderMain()">${userLang==='ru'?'Назад':'Back'}</button>
-      <div id="dnd-float-letter"></div>
-    </div>
-  `;
-  if(gameMode === 'order') renderOrderTask(ix);
-  else renderInputTask(ix);
-}
-
-// ================= Drag&Drop ==================
-let dndState = {};
-let activeIxForDND = null;
-
-function renderOrderTask(ix){
-  let t = tasks[ix];
-  let answer = t.answer;
-  if(!dndState[ix]) {
-    let letters = answer.split('').map((ch, i) => ({ch, id: i + '_' + Math.random().toString(36).substr(2,6)}));
-    dndState[ix] = {
-      bank: [...letters],
-      slots: Array(letters.length).fill(null),
-      draggingId: null,
-      dragOffset: {x:0, y:0},
-      dragPos: {x:-1000, y:-1000},
-      dragHoverSlot: null
+    const translations = {
+        ru: { pageTitle: 'Универсальный Редактор Игр', editorTitle: 'Редактор Игры', previewTitle: 'Превью Игры', sectionAppearance: '1. Внешний вид', labelBgColor: 'Цвет фона:', labelBtnColor: 'Цвет элементов/прогресса:', labelTransparentBg: 'Прозрачный фон', sectionGameType: '2. Тип игры', labelGameType: 'Выберите сложность/тип задания:', gameTypeAnagram: 'Расставить буквы (легко)', gameTypeInput: 'Впечатать ответ (сложно)', sectionContent: '3. Содержимое игры', labelGameData: 'Вопросы и ответы:', helpText: 'Каждая строка — раунд. Формат: <br><b>Вопрос | Ответ | Ссылка на картинку (необязательно)</b>', sectionFeedback: '4. Обратная связь', labelFeedbackCorrect: 'Текст при верном ответе:', labelFeedbackIncorrect: 'Текст при неверном ответе:', labelFeedbackFinal: 'Текст по завершении игры:', generateBtn: 'Сгенерировать код и обновить превью', sectionCode: '5. Готовый код', labelOutputIframe: 'Код для вставки на сайт (iframe):', labelOutputCode: 'Полный HTML-код игры:', },
+        en: { pageTitle: 'Universal Game Editor', editorTitle: 'Game Editor', previewTitle: 'Game Preview', sectionAppearance: '1. Appearance', labelBgColor: 'Background Color:', labelBtnColor: 'Elements/Progress Color:', labelTransparentBg: 'Transparent Background', sectionGameType: '2. Game Type', labelGameType: 'Choose difficulty/task type:', gameTypeAnagram: 'Arrange letters (easy)', gameTypeInput: 'Type the answer (hard)', sectionContent: '3. Game Content', labelGameData: 'Questions and Answers:', helpText: 'Each line is a round. Format: <br><b>Question | Answer | Image URL (optional)</b>', sectionFeedback: '4. Feedback Text', labelFeedbackCorrect: 'Text for correct answer:', labelFeedbackIncorrect: 'Text for incorrect answer:', labelFeedbackFinal: 'Text for game completion:', generateBtn: 'Generate Code & Update Preview', sectionCode: '5. Resulting Code', labelOutputIframe: 'Code for website embedding (iframe):', labelOutputCode: 'Full HTML code of the game:', }
     };
-  }
-  let state = dndState[ix];
+    let currentLang = 'ru';
 
-  let slotHTML = state.slots.map((obj, i) =>
-    `<div class="dd-slot"
-      data-slot="${i}"
-      style="border:${state.dragHoverSlot===i ? '2px solid #7af':'1.4px solid #dfdbe7'};
-      background:${state.dragHoverSlot===i ? '#defc':'#fff'}"
-    >${obj ? `<span>${obj.ch}</span>` : ""}</div>`
-  ).join('');
-  let bankHTML = state.bank.map((obj, k) =>
-    `<span class="dd-letter" 
-       onmousedown="dndStart(event, '${obj.id}', ${ix})"
-       ontouchstart="dndStart(event, '${obj.id}', ${ix})"
-       id="bank-${obj.id}"
-    >${obj.ch}</span>`
-  ).join('');
-  document.getElementById('answer-area').innerHTML = `
-    <div style="margin-bottom:10px;">${userLang==='ru'?'Соберите слово:':'Build the word:'}</div>
-    <div class="dd-slot-box" id="drop-slot-box" style="position:relative;">
-      ${slotHTML}
+    function setLanguage(lang) {
+        currentLang = lang;
+        const t = translations[lang];
+        document.querySelectorAll('[id]').forEach(el => {
+            const key = el.id.replace(/-([a-z])/g, g => g[1].toUpperCase());
+            if (t[key]) {
+                if (el.tagName === 'LABEL' && el.htmlFor) { el.childNodes[0].nodeValue = t[key]; }
+                else { el.innerHTML = t[key]; }
+            }
+        });
+        document.getElementById('lang-toggle').textContent = lang === 'ru' ? 'EN' : 'RU';
+    }
+
+    const bgColorInput = document.getElementById('bg-color');
+    const btnColorInput = document.getElementById('btn-color');
+    const transparentBgCheckbox = document.getElementById('transparent-bg');
+    const gameTypeSelect = document.getElementById('game-type');
+    const gameDataInput = document.getElementById('game-data');
+    const correctFeedbackInput = document.getElementById('feedback-correct');
+    const incorrectFeedbackInput = document.getElementById('feedback-incorrect');
+    const finalFeedbackInput = document.getElementById('feedback-final');
+    const generateBtn = document.getElementById('generate-btn');
+    const langToggleBtn = document.getElementById('lang-toggle');
+    const outputCodeTextarea = document.getElementById('output-code');
+    const outputIframeTextarea = document.getElementById('output-iframe');
+    const previewFrame = document.getElementById('preview-container');
+
+    function generateGame() {
+        const useTransparentBg = transparentBgCheckbox.checked;
+        const finalBgColor = useTransparentBg ? 'transparent' : bgColorInput.value;
+        const btnColor = btnColorInput.value;
+        const gameType = gameTypeSelect.value;
+        const correctFeedback = correctFeedbackInput.value;
+        const incorrectFeedback = incorrectFeedbackInput.value;
+        const finalFeedback = finalFeedbackInput.value;
+
+        const gameDataRaw = gameDataInput.value.trim().split('\n');
+        const gameData = gameDataRaw.map(line => {
+            const parts = line.split('|');
+            if (parts.length < 2 || !parts[0].trim() || !parts[1].trim()) return null;
+            return { definition: parts[0].trim(), answer: parts[1].trim(), imageUrl: parts.length > 2 ? parts[2].trim() : '' };
+        }).filter(item => item !== null);
+        
+        let gameTemplate = '';
+        const commonStyles = `
+            body { font-family: sans-serif; background-color: ${finalBgColor}; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; color: #333; padding: 20px 0; box-sizing: border-box; }
+            .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 15px rgba(0,0,0,0.1); text-align: center; width: 90%; max-width: 600px; display: flex; flex-direction: column; }
+            .progress-container { width: 100%; background-color: #e0e0e0; border-radius: 10px; margin-bottom: 20px; position: relative; height: 25px; }
+            .progress-bar { width: 0%; height: 100%; background-color: ${btnColor}; border-radius: 10px; transition: width 0.5s ease-in-out; }
+            .progress-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+            #game-image { max-width: 100%; height: auto; max-height: 150px; border-radius: 8px; margin-bottom: 20px; object-fit: cover; }
+            .definition { font-size: 1.2em; margin-bottom: 20px; }
+            #feedback { margin-top: 20px; font-size: 1.1em; font-weight: bold; min-height: 1.2em; }
+            .correct-feedback { color: #28a745; }
+            .incorrect-feedback { color: #dc3545; }
+        `;
+
+        if (gameType === 'anagram') {
+            gameTemplate = `
+<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>Игра: Анаграмма</title>
+<style>
+    ${commonStyles}
+    .answer-display { background: #eee; border-radius: 5px; padding: 15px; min-height: 50px; margin: 20px 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; border: 2px dashed #ccc; }
+    .letter-pool { margin: 20px 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    .letter-btn { font-size: 1.5em; width: 50px; height: 50px; border: none; border-radius: 5px; background-color: ${btnColor}; color: white; cursor: pointer; transition: all 0.2s; }
+    .letter-btn:hover { transform: scale(1.1); }
+    .letter-btn.placed { background-color: #6c757d; cursor: not-allowed; }
+    .letter-btn.error { background-color: #dc3545 !important; animation: shake 0.5s; }
+    .controls { display: flex; gap: 10px; justify-content: center; }
+    .control-btn { padding: 10px 20px; font-size: 1em; border: none; border-radius: 5px; color: white; cursor: pointer; }
+    #check-btn { background-color: #007bff; }
+    #clear-btn { background-color: #ffc107; color: #333; }
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+</style></head><body>
+<div class="container">
+    <div class="progress-container"><div class="progress-bar"></div><div class="progress-text"></div></div>
+    <img id="game-image" src="" alt="">
+    <p class="definition"></p>
+    <div class="answer-display"></div>
+    <div class="letter-pool"></div>
+    <div class="controls">
+        <button id="check-btn" class="control-btn">${currentLang === 'ru' ? 'Проверить' : 'Check'}</button>
+        <button id="clear-btn" class="control-btn">${currentLang === 'ru' ? 'Сброс' : 'Clear'}</button>
     </div>
-    <div class="dd-letter-bank" id="letter-bank">${bankHTML}</div>
-    <button onclick="undoLast(${ix})" style="margin-top:7px;" ${state.slots.every(s=>!s)?'disabled':''}>↩ Undo</button>
-    <div style="margin:8px;font-size:12px;color:#888;">
-      ${userLang==='ru'?'Перетащите букву мышью или пальцем в нужную ячейку':'Drag and drop letter into slot'}
+    <p id="feedback"></p>
+</div>
+<script>
+    const gameData = ${JSON.stringify(gameData)};
+    let currentQuestionIndex = 0;
+    const UIElements = { definition: document.querySelector('.definition'), image: document.getElementById('game-image'), answerDisplay: document.querySelector('.answer-display'), letterPool: document.querySelector('.letter-pool'), feedback: document.getElementById('feedback'), checkBtn: document.getElementById('check-btn'), clearBtn: document.getElementById('clear-btn'), controls: document.querySelector('.controls'), progressBar: document.querySelector('.progress-bar'), progressText: document.querySelector('.progress-text'), };
+    function updateProgress() { const total = gameData.length; const progress = (currentQuestionIndex / total) * 100; UIElements.progressBar.style.width = progress + '%'; UIElements.progressText.textContent = \`\${currentQuestionIndex} / \${total}\`; }
+    function shuffle(array) { return array.sort(() => Math.random() - 0.5); }
+    function loadQuestion() { updateProgress(); if (currentQuestionIndex >= gameData.length) { UIElements.definition.textContent = "${finalFeedback}"; UIElements.image.style.display = 'none'; UIElements.answerDisplay.innerHTML = ''; UIElements.letterPool.innerHTML = ''; UIElements.controls.style.display = 'none'; UIElements.feedback.innerHTML = ''; UIElements.progressBar.style.width = '100%'; UIElements.progressText.textContent = \`\${gameData.length} / \${gameData.length}\`; return; } const q = gameData[currentQuestionIndex]; UIElements.definition.textContent = q.definition; UIElements.image.style.display = q.imageUrl ? 'block' : 'none'; UIElements.image.src = q.imageUrl; UIElements.feedback.textContent = ''; UIElements.answerDisplay.innerHTML = ''; UIElements.letterPool.innerHTML = ''; shuffle([...q.answer.toUpperCase().replace(/ /g, '')]).forEach(letter => { const btn = document.createElement('button'); btn.className = 'letter-btn'; btn.textContent = letter; btn.onclick = () => moveLetter(btn, 'to_answer'); UIElements.letterPool.appendChild(btn); }); }
+    function moveLetter(btn, direction) { if (direction === 'to_answer' && !btn.classList.contains('placed')) { btn.classList.add('placed'); const newBtn = btn.cloneNode(true); newBtn.onclick = () => moveLetter(newBtn, 'to_pool'); UIElements.answerDisplay.appendChild(newBtn); } else if (direction === 'to_pool') { const originalBtn = Array.from(UIElements.letterPool.children).find(b => b.textContent === btn.textContent && b.classList.contains('placed') && !b.isSameNode(btn)); if (originalBtn) originalBtn.classList.remove('placed'); btn.remove(); } }
+    UIElements.clearBtn.onclick = () => { UIElements.answerDisplay.innerHTML = ''; UIElements.letterPool.querySelectorAll('.letter-btn').forEach(b => b.classList.remove('placed')); };
+    UIElements.checkBtn.onclick = () => { const answerButtons = UIElements.answerDisplay.querySelectorAll('.letter-btn'); answerButtons.forEach(btn => btn.classList.remove('error')); const userAnswer = Array.from(answerButtons).map(b => b.textContent).join(''); const correctAnswer = gameData[currentQuestionIndex].answer.toUpperCase().replace(/ /g, ''); if (userAnswer === correctAnswer) { UIElements.feedback.textContent = "${correctFeedback}"; UIElements.feedback.className = 'correct-feedback'; currentQuestionIndex++; setTimeout(loadQuestion, 1500); } else { UIElements.feedback.textContent = "${incorrectFeedback}"; UIElements.feedback.className = 'incorrect-feedback'; for (let i = 0; i < answerButtons.length; i++) { if (answerButtons[i].textContent !== correctAnswer[i]) { answerButtons[i].classList.add('error'); } } } };
+    loadQuestion();
+<\/script></body></html>`;
+        } else {
+            gameTemplate = `
+<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>Игра: Ввод ответа</title>
+<style>
+    ${commonStyles}
+    #answer-input { width: 80%; padding: 15px; font-size: 1.2em; text-align: center; border: 2px solid #ccc; border-radius: 5px; margin-top: 20px; }
+    #answer-input:focus { border-color: ${btnColor}; outline: none; }
+    #check-btn { padding: 12px 25px; font-size: 1.1em; border: none; border-radius: 5px; color: white; cursor: pointer; background-color: ${btnColor}; margin-top: 20px; }
+</style></head><body>
+<div class="container">
+    <div class="progress-container"><div class="progress-bar"></div><div class="progress-text"></div></div>
+    <img id="game-image" src="" alt="">
+    <p class="definition"></p>
+    <div id="interactive-area">
+        <input type="text" id="answer-input" placeholder="${currentLang === 'ru' ? 'Введите ответ...' : 'Type answer...'}">
+        <button id="check-btn">${currentLang === 'ru' ? 'Проверить' : 'Check'}</button>
     </div>
-    <div id="dnd-float-letter" style="display:none;"></div>
-  `;
+    <p id="feedback"></p>
+</div>
+<script>
+    const gameData = ${JSON.stringify(gameData)};
+    let currentQuestionIndex = 0;
+    const UIElements = { definition: document.querySelector('.definition'), image: document.getElementById('game-image'), input: document.getElementById('answer-input'), checkBtn: document.getElementById('check-btn'), feedback: document.getElementById('feedback'), interactiveArea: document.getElementById('interactive-area'), progressBar: document.querySelector('.progress-bar'), progressText: document.querySelector('.progress-text'), };
+    function updateProgress() { const total = gameData.length; const progress = (currentQuestionIndex / total) * 100; UIElements.progressBar.style.width = progress + '%'; UIElements.progressText.textContent = \`\${currentQuestionIndex} / \${total}\`; }
+    function loadQuestion() { updateProgress(); if (currentQuestionIndex >= gameData.length) { UIElements.definition.textContent = "${finalFeedback}"; UIElements.image.style.display = 'none'; UIElements.interactiveArea.style.display = 'none'; UIElements.feedback.innerHTML = ''; UIElements.progressBar.style.width = '100%'; UIElements.progressText.textContent = \`\${gameData.length} / \${gameData.length}\`; return; } const q = gameData[currentQuestionIndex]; UIElements.definition.textContent = q.definition; UIElements.image.style.display = q.imageUrl ? 'block' : 'none'; UIElements.image.src = q.imageUrl; UIElements.input.value = ''; UIElements.feedback.textContent = ''; UIElements.input.focus(); }
+    function checkAnswer() { const userAnswer = UIElements.input.value.trim().toLowerCase(); const correctAnswer = gameData[currentQuestionIndex].answer.trim().toLowerCase(); if (userAnswer === correctAnswer) { UIElements.feedback.textContent = "${correctFeedback}"; UIElements.feedback.className = 'correct-feedback'; currentQuestionIndex++; setTimeout(loadQuestion, 1500); } else { UIElements.feedback.textContent = "${incorrectFeedback}"; UIElements.feedback.className = 'incorrect-feedback'; } }
+    UIElements.checkBtn.onclick = checkAnswer;
+    UIElements.input.onkeydown = (e) => { if (e.key === 'Enter') checkAnswer(); };
+    loadQuestion();
+<\/script></body></html>`;
+        }
 
-  // floating letter
-  if(state.draggingId) {
-    let obj = state.bank.find(o=>o.id===state.draggingId);
-    const floatDiv = document.getElementById('dnd-float-letter');
-    if(obj){
-      floatDiv.style.display = 'block';
-      floatDiv.style.position = 'fixed';
-      floatDiv.style.zIndex = 9999;
-      floatDiv.style.pointerEvents = 'none';
-      floatDiv.style.left = (state.dragPos.x-state.dragOffset.x)+'px';
-      floatDiv.style.top = (state.dragPos.y-state.dragOffset.y)+'px';
-      floatDiv.innerHTML = `<span class="dd-letter" style="box-shadow:0 2px 20px #67abff7f; background:#b8eafd; color:#015;
-        font-size:27px; padding:10px 20px; border:2px solid #48e; position:relative; opacity:.93;">
-        ${obj.ch}
-      </span>`;
+        outputCodeTextarea.value = gameTemplate.trim();
+        const iframeCode = `<iframe srcdoc="${gameTemplate.replace(/"/g, '&quot;')}" width="100%" height="650" style="border:none;" title="Interactive Game"></iframe>`;
+        outputIframeTextarea.value = iframeCode;
+        previewFrame.srcdoc = gameTemplate;
     }
-  } else {
-    let floatDiv = document.getElementById('dnd-float-letter');
-    if(floatDiv) floatDiv.style.display='none';
-  }
-}
 
-// DND event handlers (глобально!)
-function dndStart(ev, id, ix){
-  activeIxForDND = ix;
-  let state = dndState[ix];
-  ev.preventDefault();
-  const isTouch = ev.touches && ev.touches.length;
-  let x = isTouch ? ev.touches[0].clientX : ev.clientX;
-  let y = isTouch ? ev.touches[0].clientY : ev.clientY;
-  let btn = document.getElementById('bank-'+id);
-  let rect = btn.getBoundingClientRect();
-  state.draggingId = id;
-  state.dragOffset = { x: x - rect.left, y: y - rect.top };
-  state.dragPos = {x:x, y:y};
-  renderOrderTask(ix);
+    transparentBgCheckbox.addEventListener('change', () => {
+        bgColorInput.disabled = transparentBgCheckbox.checked;
+        generateGame();
+    });
+    generateBtn.addEventListener('click', generateGame);
+    langToggleBtn.addEventListener('click', () => {
+        setLanguage(currentLang === 'ru' ? 'en' : 'ru');
+        generateGame();
+    });
+    gameTypeSelect.addEventListener('change', generateGame);
 
-  window.addEventListener('mousemove', dragMoveHandler);
-  window.addEventListener('touchmove', dragMoveHandler, {passive:false});
-  window.addEventListener('mouseup', dragUpHandler);
-  window.addEventListener('touchend', dragUpHandler, {passive:false});
-}
-function dragMoveHandler(e){
-  let state = dndState[activeIxForDND];
-  if(!state) return;
-  let clientX, clientY;
-  if(e.touches) {
-    clientX = e.touches[0].clientX; clientY = e.touches[0].clientY;
-  } else {
-    clientX = e.clientX; clientY = e.clientY;
-  }
-  state.dragPos = {x:clientX, y:clientY};
-  let slots = Array.from(document.querySelectorAll('.dd-slot'));
-  let over = null;
-  for(let i=0;i<slots.length;i++){
-    let r = slots[i].getBoundingClientRect();
-    if(clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom){
-      over = i; break;
-    }
-  }
-  state.dragHoverSlot = over;
-  renderOrderTask(activeIxForDND);
-}
-function dragUpHandler(e){
-  let state = dndState[activeIxForDND];
-  if(!state) return;
-  let clientX, clientY;
-  if(e.changedTouches) {
-    clientX = e.changedTouches[0].clientX; clientY = e.changedTouches[0].clientY;
-  } else {
-    clientX = e.clientX; clientY = e.clientY;
-  }
-  let dropped = null;
-  let slots = Array.from(document.querySelectorAll('.dd-slot'));
-  for(let i=0;i<slots.length;i++){
-    let r = slots[i].getBoundingClientRect();
-    if(clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom){
-      dropped = i; break;
-    }
-  }
-  if(typeof dropped === 'number' && !state.slots[dropped]) {
-    let idx = state.bank.findIndex(obj=>obj.id===state.draggingId);
-    if(idx!==-1){
-      state.slots[dropped] = state.bank[idx];
-      state.bank.splice(idx,1);
-    }
-    state.draggingId = null; state.dragHoverSlot = null;
-    renderOrderTask(activeIxForDND);
-    checkAnswerDND(activeIxForDND);
-  } else {
-    state.draggingId = null; state.dragHoverSlot = null; renderOrderTask(activeIxForDND);
-  }
-  window.removeEventListener('mousemove',dragMoveHandler);
-  window.removeEventListener('touchmove',dragMoveHandler);
-  window.removeEventListener('mouseup',dragUpHandler);
-  window.removeEventListener('touchend',dragUpHandler);
-}
-function undoLast(ix) {
-  let state = dndState[ix];
-  for(let i=state.slots.length-1;i>=0;i--){
-    if(state.slots[i]){
-      state.bank.push(state.slots[i]);
-      state.slots[i]=null;
-      break;
-    }
-  }
-  renderOrderTask(ix);
-}
-function checkAnswerDND(ix){
-  let state = dndState[ix];
-  if(state.slots.every(v=>v)){
-    let answer = tasks[ix].answer;
-    let userWord = state.slots.map(x=>x.ch).join('');
-    if(userWord === answer) positiveResult(ix);
-  }
-}
-// ================
-
-function renderInputTask(ix){
-  let t = tasks[ix];
-  let html = `<div style="margin:12px;">${userLang==='ru'?'Введите слово:':'Type the word:'}</div>
-    <input id="user-input" type="text" maxlength="${t.answer.length+2}" style="font-size:21px; padding:5px; max-width:200px; text-align:center; border-radius:6px; border:1px solid #ccc;"/>
-    <br><br>
-    <button onclick="checkInputAnswer(${ix})">${userLang==='ru'?'Проверить':'Check'}</button>`;
-  document.getElementById('answer-area').innerHTML = html;
-}
-window.checkInputAnswer = function(ix){
-  let val = (document.getElementById('user-input').value||'').trim().toLowerCase();
-  if(val === tasks[ix].answer) positiveResult(ix);
-}
-
-function positiveResult(ix){
-  tasks[ix].done = true;
-  let el = document.getElementById('feedback-area');
-  let msg = feedback[userLang][Math.floor(Math.random()*feedback[userLang].length)];
-  el.innerHTML = `<div style="padding:25px 10px 7px;font-size:22px;color:#27684d;">${msg}<br>
-    <button onclick="renderMain()" style="margin-top:17px;">${userLang==='ru'?'Вернуться':'Go back'}</button></div>`;
-  setTimeout(()=>renderMain(), 1700);
-}
-
-function checkWin(){
-  let root = document.getElementById('final-screen');
-  if(tasks.every(t=>t.done)) {
-    root.innerHTML = `
-      <div style="background:#dfffd9;padding:20px 16px;border-radius:13px;font-size:19px;color:#216423;margin:17px auto 9px;max-width:420px;box-shadow:0 2px 16px #aaffccd3;">
-        🎉 ${userLang==='ru'?'Поздравляем! Все задания выполнены.' : 'All done!'}
-        <br>
-        ${userLang==='ru'?'Отметьте самостоятельно количество правильных ответов:' : 'Mark your correct answers manually:'}
-        <div class="manual-scale">${manualScale.map((v,ix)=>
-          `<div class="scale-dot${v?' active':''}" onclick="markSelf(${ix})">${v?'✔':''}</div>`
-        ).join('')}
-        </div>
-        <div style="font-size:13px;color:#27684d;">${userLang==='ru'?'Проверьте, сколько слов вы действительно решили правильно.' : 'Check how many words you really got right.'}</div>
-      </div>
-    `;
-    if(!manualScale.some(()=>true) || manualScale.length!==tasks.length) manualScale = Array(tasks.length).fill(false);
-  } else root.innerHTML = '';
-}
-window.markSelf = function(ix){
-  manualScale[ix] = !manualScale[ix];
-  checkWin();
-};
+    window.addEventListener('load', () => {
+        setLanguage('ru');
+        generateGame();
+    });
 </script>
+
 </body>
 </html>
